@@ -57,15 +57,17 @@ class KDTree:
     def k_nearest(self, target, k=5):
         """Return the k nearest (dist, point, data) tuples, sorted nearest-first."""
         heap = []  # max-heap via negative distance
+        counter = [0]  # unique tie-breaker so heap never compares points/data directly
 
         def visit(node):
             if node is None:
                 return
             d2 = _dist2(target, node.point)
+            counter[0] += 1
             if len(heap) < k:
-                heapq.heappush(heap, (-d2, node.point, node.data))
+                heapq.heappush(heap, (-d2, counter[0], node.point, node.data))
             elif d2 < -heap[0][0]:
-                heapq.heapreplace(heap, (-d2, node.point, node.data))
+                heapq.heapreplace(heap, (-d2, counter[0], node.point, node.data))
 
             axis = node.axis
             diff = target[axis] - node.point[axis]
@@ -76,7 +78,7 @@ class KDTree:
                 visit(far)
 
         visit(self.root)
-        results = sorted(((-d2, p, dat) for d2, p, dat in heap), key=lambda x: x[0])
+        results = sorted(((-d2, p, dat) for d2, _, p, dat in heap), key=lambda x: x[0])
         return [(math.sqrt(d2), p, dat) for d2, p, dat in results]
 
     def radius_query(self, target, radius):

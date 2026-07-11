@@ -10,12 +10,13 @@ import sys
 import time
 import random
 import csv
+import argparse
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from kdtree import KDTree
 from quadtree import QuadTree, BoundingBox, Point
-from data_loader import generate_synthetic_data
+from data_loader import generate_synthetic_data, load_real_data
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
 
@@ -33,13 +34,31 @@ def build_quadtree(points, data_list):
     return qt
 
 
-def run_benchmark(sizes=(1_000, 5_000, 10_000, 50_000, 100_000), n_queries=200, seed=1):
+def run_benchmark(sizes=(1_000, 5_000, 10_000, 50_000, 100_000), n_queries=200, seed=1,
+                   points=None, data_list=None):
+    """
+    If points/data_list are provided (e.g. real Inside Airbnb data), they are
+    shuffled once and sliced for each size in `sizes`, so smaller sizes aren't
+    biased toward whichever city happened to load first. Otherwise, synthetic
+    data is generated.
+    """
     rng = random.Random(seed)
     rows = []
+    is_real = points is not None
 
-    # generate the largest dataset once, slice for smaller sizes so results are comparable
-    max_n = max(sizes)
-    all_points, all_data = generate_synthetic_data(max_n, seed=seed)
+    if is_real:
+        combined = list(zip(points, data_list))
+        rng.shuffle(combined)
+        all_points = [p for p, _ in combined]
+        all_data = [d for _, d in combined]
+        max_available = len(all_points)
+        sizes = tuple(s for s in sizes if s <= max_available)
+        if not sizes or sizes[-1] != max_available:
+            sizes = sizes + (max_available,)
+    else:
+        # generate the largest dataset once, slice for smaller sizes so results are comparable
+        max_n = max(sizes)
+        all_points, all_data = generate_synthetic_data(max_n, seed=seed)
 
     for n in sizes:
         points, data_list = all_points[:n], all_data[:n]
@@ -86,16 +105,17 @@ def run_benchmark(sizes=(1_000, 5_000, 10_000, 50_000, 100_000), n_queries=200, 
               f"radius(kd/qt)={kd_radius*1000:.3f}ms/{qt_radius*1000:.3f}ms")
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    csv_path = os.path.join(RESULTS_DIR, "benchmark_results.csv")
+    suffix = "_real" if is_real else "_synthetic"
+    csv_path = os.path.join(RESULTS_DIR, f"benchmark_results{suffix}.csv")
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
     print(f"\nSaved results to {csv_path}")
-    return rows
+    return rows, suffix
 
 
-def plot_results(rows):
+def plot_results(rows, suffix="_synthetic"):
     import matplotlib.pyplot as plt
 
     ns = [r["n"] for r in rows]
@@ -122,13 +142,40 @@ def plot_results(rows):
     axes[2].set_ylabel("Milliseconds")
     axes[2].legend()
 
-    fig.suptitle("KD-Tree vs Quadtree: NestScope Benchmark")
+    title_extra = "Real Inside Airbnb Data" if suffix == "_real" else "Synthetic Data"
+    fig.suptitle(f"KD-Tree vs Quadtree: NestScope Benchmark ({title_extra})")
     fig.tight_layout()
-    out_path = os.path.join(RESULTS_DIR, "benchmark_chart.png")
+    out_path = os.path.join(RESULTS_DIR, f"benchmark_chart{suffix}.png")
     fig.savefig(out_path, dpi=150)
     print(f"Saved chart to {out_path}")
 
 
 if __name__ == "__main__":
-    results = run_benchmark()
-    plot_results(results)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--real", action="store_true",
+                         help="Benchmark on real Inside Airbnb CSVs instead of synthetic data")
+    parser.add_argument("--csv", nargs="+", default=None,
+                         help="Paths to real listing CSVs (used with --real)")
+    args = parser.parse_args()
+
+    if args.real:
+        csv_paths = args.csv or [
+            "data/nyc_listings.csv",
+            "data/chicago_listings.csv",
+            "data/seattle_listings.csv",
+            "data/sf_listings.csv",
+            "data/boston_listings.csv",
+            "data/nashville_listings.csv",
+            "data/austin_listings.csv",
+            "data/jerseycity_listings.csv",
+            "data/hollywoodfl_listings.csv",
+            "data/sydney_listings.csv",
+        ]
+        print(f"Loading real data from {csv_paths} ...")
+        points, data_list = load_real_data(csv_paths)
+        print(f"Loaded {len(points):,} listings.\n")
+        results, suffix = run_benchmark(points=points, data_list=data_list)
+    else:
+        results, suffix = run_benchmark()
+
+    plot_results(results, suffix)
