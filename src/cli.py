@@ -16,8 +16,19 @@ from kdtree import KDTree
 from quadtree import QuadTree, BoundingBox, Point
 from data_loader import generate_synthetic_data, load_real_data
 
-DATA_MODE = "synthetic"  # "synthetic" or "real"
-CSV_PATHS = []           # e.g. ["data/miami_listings.csv", "data/nyc_listings.csv"]
+DATA_MODE = "real"  # "synthetic" or "real"
+CSV_PATHS = [
+    "data/nyc_listings.csv",
+    "data/chicago_listings.csv",
+    "data/seattle_listings.csv",
+    "data/sf_listings.csv",
+    "data/boston_listings.csv",
+    "data/nashville_listings.csv",
+    "data/austin_listings.csv",
+    "data/jerseycity_listings.csv",
+    "data/hollywoodfl_listings.csv",
+    "data/sydney_listings.csv",
+]           # e.g. ["data/miami_listings.csv", "data/nyc_listings.csv"]
 N_SYNTHETIC = 100_000
 
 
